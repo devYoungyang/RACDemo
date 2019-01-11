@@ -178,7 +178,7 @@
     /**
     RACSignal *signalA = [RACSignal createSignal:^RACDisposable *(id<RACSubscriber> subscriber) {
         
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
                 [subscriber sendNext:@1111];
                 [subscriber sendCompleted];
         });
@@ -188,8 +188,8 @@
     }];
     RACSignal *signalB = [RACSignal createSignal:^RACDisposable *(id<RACSubscriber> subscriber) {
         
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            [subscriber sendNext:@2222];
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [subscriber sendNext:[RACTuple tupleWithObjects:@"1",@"2", nil]];
             [subscriber sendCompleted];
         });
         
@@ -200,17 +200,19 @@
     // 把signalA拼接到signalB后，signalA发送完成，signalB才会被激活。
     RACSignal *concatSignal = [signalA combineLatestWith:signalB];
     
+    
     // 以后只需要面对拼接信号开发。
     // 订阅拼接的信号，不需要单独订阅signalA，signalB
     // 内部会自动订阅。
     // 注意：第一个信号必须发送完成，第二个信号才会被激活
-    [concatSignal subscribeNext:^(id x) {
+    [[concatSignal delay:5] subscribeNext:^(id x) {
         NSLog(@"%@",x);
     }];
+    
     **/
     
-    
-    RACSignal *signalA = [[[RACSignal createSignal:^RACDisposable *(id<RACSubscriber> subscriber) {
+    /**
+     [[[RACSignal createSignal:^RACDisposable *(id<RACSubscriber> subscriber) {
         
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             [subscriber sendNext:@22222];
@@ -236,6 +238,70 @@
         NSLog(@"======%@======",x);
     }];
     [command execute:@"111"];
+    **/
+    
+    /**
+    RACSignal *signal = [RACSignal createSignal:^RACDisposable *(id<RACSubscriber> subscriber) {
+        NSLog(@"%@ 1111",[NSThread currentThread]);
+        
+        //可以放更新UI操作
+        
+        [subscriber sendNext:@0.1];
+        RACDisposable *disposable = [[RACScheduler scheduler] schedule:^{
+            NSLog(@"%@ 5555",[NSThread currentThread]);
+            [subscriber sendNext:@1.1];
+            [subscriber sendCompleted];
+        }];
+        return disposable;
+    }];
+    [[RACScheduler scheduler] schedule:^{
+        NSLog(@"%@ 222",[NSThread currentThread]);
+        [[signal subscribeOn:[RACScheduler mainThreadScheduler]] subscribeNext:^(id x) {
+            NSLog(@"==%@---%@====",[NSThread currentThread], x);
+        }]; }];
+    NSLog(@"%@ 4444",[NSThread currentThread]);
+    **/
+    
+    /**
+    RACSignal *signal = [RACSignal createSignal:^RACDisposable *(id<RACSubscriber> subscriber) {
+        NSLog(@"%@ 111",[NSThread currentThread]);
+        [subscriber sendNext:@0.1];
+        RACDisposable *disposable = [[RACScheduler scheduler] schedule:^{
+            NSLog(@"%@ 555",[NSThread currentThread]);
+            [subscriber sendNext:@1.1];
+            [subscriber sendCompleted];
+        }];
+        return disposable;
+    }];
+    [[RACScheduler scheduler] schedule:^{
+        NSLog(@"%@ 222",[NSThread currentThread]);
+        [[signal deliverOn:[RACScheduler mainThreadScheduler]] subscribeNext:^(id x) {
+            NSLog(@"--%@ %@---",[NSThread currentThread], x);
+            //可以放UI更新操作
+        }]; }];
+    **/
+    
+    [[RACScheduler scheduler] afterDelay:2 schedule:^{
+         NSLog(@"======延迟两秒======");
+    }];
+    [[RACSignal interval:2 onScheduler:[RACScheduler mainThreadScheduler]] subscribeNext:^(NSDate * _Nullable x) {
+        NSLog(@"======两秒执行一次======");
+    }];
+    
+    UIButton *btn=[UIButton buttonWithType:UIButtonTypeCustom];
+    btn.frame=CGRectMake(100, 100, 100, 50);
+    [btn setTitle:@"按钮" forState:UIControlStateNormal];
+    [self.view addSubview:btn];
+    [[btn rac_signalForControlEvents:UIControlEventTouchUpInside] subscribeNext:^(__kindof UIControl * _Nullable x) {
+        NSLog(@"====点击了按钮===");
+    }];
+    UILabel *titleLabel=[[UILabel alloc] initWithFrame:CGRectMake(100, 200, 200, 100)];
+    [self.view addSubview:titleLabel];
+    
+    RAC(titleLabel,text)=[[RACSignal interval:1 onScheduler:[RACScheduler mainThreadScheduler]] map:^id _Nullable(NSDate * _Nullable value) {
+        return value.description;
+    }];
+    
 }
 -(void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event{
     self.titleLabel.text=@"HAHAHAHAHA";
